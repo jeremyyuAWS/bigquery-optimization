@@ -42,6 +42,38 @@ import {
   Scatter, ScatterChart
 } from 'recharts';
 import { format, subDays, addDays, startOfMonth, endOfMonth } from 'date-fns';
+import HeatMap from 'react-heatmap-grid';
+
+interface HeatmapData {
+  data: number[][];
+  xLabels: string[];
+  yLabels: string[];
+}
+
+const generateHeatmapData = (): HeatmapData => {
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+  
+  const data = days.map(day => {
+    return hours.map(hour => {
+      let value = 0;
+      if (hour >= 9 && hour <= 17 && day !== 'Sat' && day !== 'Sun') {
+        value = 70 + Math.random() * 30; // High activity during business hours
+      } else if ((hour >= 7 && hour <= 19) && day !== 'Sat' && day !== 'Sun') {
+        value = 30 + Math.random() * 40; // Medium activity during extended hours
+      } else {
+        value = Math.random() * 20; // Low activity during off-hours
+      }
+      return Math.round(value);
+    });
+  });
+  
+  return {
+    data,
+    xLabels: hours.map(h => `${h}`),
+    yLabels: days
+  };
+};
 
 // Error Boundary Component
 class ErrorBoundaryComponent extends React.Component<
@@ -164,32 +196,6 @@ const generateSyntheticData = () => {
   ];
 
   // Query execution time heatmap data
-  const generateHeatmapData = () => {
-    const hours = Array.from({ length: 24 }, (_, i) => i);
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    
-    return days.flatMap(day => 
-      hours.map(hour => {
-        // Business hours have more activity
-        let baseValue = 0;
-        if (hour >= 9 && hour <= 17 && day !== 'Sat' && day !== 'Sun') {
-          baseValue = 20 + Math.random() * 80;
-        } else if ((hour >= 7 && hour <= 19) || (day !== 'Sat' && day !== 'Sun')) {
-          baseValue = 10 + Math.random() * 30;
-        } else {
-          baseValue = Math.random() * 15;
-        }
-        
-        return {
-          day,
-          hour: `${hour}:00`,
-          value: Math.round(baseValue),
-          queries: Math.round(baseValue / 5)
-        };
-      })
-    );
-  };
-  
   const queryHeatmapData = generateHeatmapData();
 
   // Monthly spend trend with forecast
@@ -590,13 +596,28 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 // Format money values
-const formatMoney = (value: number) => {
-  return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const formatMoney = (value: number | string): string => {
+  const numValue = typeof value === 'string' ? parseFloat(value) : value;
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(numValue);
 };
 
 // Colors for charts
 const COLORS = ['#4f46e5', '#3b82f6', '#0ea5e9', '#06b6d4', '#14b8a6'];
 const ROI_COLORS = ['#4ade80', '#facc15', '#f87171'];
+
+// Add BigQuery logo component
+const BigQueryLogo = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M6.73 10.83h2.49v6.55c0 .71-.57 1.29-1.28 1.29H6.73v-7.84z" fill="#4285F4"/>
+    <path d="M11.07 4.99h2.49v13.68c0 .71-.57 1.29-1.28 1.29h-1.21V4.99z" fill="#1A73E8"/>
+    <path d="M15.41 8.55h2.49v10.12c0 .71-.57 1.29-1.28 1.29h-1.21V8.55z" fill="#4285F4"/>
+  </svg>
+);
 
 function App() {
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -895,108 +916,107 @@ function App() {
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto">
           {/* Header */}
-          <header className="bg-white border-b border-gray-200 p-4 flex justify-between items-center">
-            <div className="flex items-center space-x-4">
-              <h2 className="text-xl font-semibold">
-                {activeTab === "dashboard" && "Analytics Dashboard"}
-                {activeTab === "chat" && "Chat Assistant"}
-                {activeTab === "cost" && "Cost Optimization"}
-                {activeTab === "roi" && "ROI Mapping"}
-              </h2>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              {/* Help Button (Welcome Modal Trigger) */}
-              <button 
-                className="p-2 text-gray-500 hover:text-gray-700 flex items-center gap-1"
-                onClick={() => setWelcomeModalOpen(true)}
-              >
-                <LifeBuoy className="h-5 w-5" />
-                <span className="text-sm hidden md:inline">Help & Tour</span>
-              </button>
-              
-              {/* Notifications Bell with Badge */}
-              <div className="relative" ref={notificationRef}>
-                <button 
-                  className="p-2 text-gray-500 hover:text-gray-700"
-                  onClick={() => setNotificationPanelOpen(!notificationPanelOpen)}
-                >
-                  <Bell className="h-5 w-5" />
-                  {unreadCount > 0 && (
-                    <span className="absolute top-0 right-0 transform translate-x-1/2 -translate-y-1/2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
-                      {unreadCount}
-                    </span>
-                  )}
-                </button>
-                
-                {/* Notification Panel */}
-                {notificationPanelOpen && (
-                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-md shadow-lg overflow-hidden z-10 border border-gray-200">
-                    <div className="p-3 border-b border-gray-200 flex justify-between items-center">
-                      <h3 className="font-semibold text-gray-700">Notifications</h3>
-                      <button 
-                        onClick={markAllAsRead}
-                        className="text-xs text-indigo-600 hover:text-indigo-800"
-                      >
-                        Mark all as read
-                      </button>
-                    </div>
-                    
-                    <div className="max-h-96 overflow-y-auto">
-                      {notifications.length === 0 ? (
-                        <div className="p-4 text-center text-gray-500">No notifications</div>
-                      ) : (
-                        <div>
-                          {notifications.map(notification => (
-                            <div 
-                              key={notification.id} 
-                              className={`p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 ${!notification.read ? 'bg-blue-50' : ''}`}
-                              onClick={() => handleNotificationClick(notification.id)}
-                            >
-                              <div className="flex">
-                                <div className="flex-shrink-0 mt-1">
-                                  {getNotificationIcon(notification.type)}
-                                </div>
-                                <div className="ml-3 flex-1">
-                                  <div className="flex justify-between items-start">
-                                    <p className={`text-sm font-medium ${!notification.read ? 'text-gray-900' : 'text-gray-600'}`}>
-                                      {notification.title}
-                                    </p>
-                                    {notification.priority === 'high' && (
-                                      <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-800">
-                                        High
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="text-xs text-gray-500 mt-1">
-                                    {notification.message}
-                                  </p>
-                                  <p className="text-xs text-gray-400 mt-1">
-                                    {formatRelativeTime(notification.timestamp)}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+          <header className="bg-white shadow-sm">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <BigQueryLogo />
+                  <h1 className="ml-2 text-xl font-semibold text-gray-900">BigQuery Optimize</h1>
+                </div>
+                <div className="flex items-center space-x-4">
+                  {/* Help Button (Welcome Modal Trigger) */}
+                  <button 
+                    className="p-2 text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                    onClick={() => setWelcomeModalOpen(true)}
+                  >
+                    <LifeBuoy className="h-5 w-5" />
+                    <span className="text-sm hidden md:inline">Help & Tour</span>
+                  </button>
+                  
+                  {/* Notifications Bell with Badge */}
+                  <div className="relative" ref={notificationRef}>
+                    <button 
+                      className="p-2 text-gray-500 hover:text-gray-700"
+                      onClick={() => setNotificationPanelOpen(!notificationPanelOpen)}
+                    >
+                      <Bell className="h-5 w-5" />
+                      {unreadCount > 0 && (
+                        <span className="absolute top-0 right-0 transform translate-x-1/2 -translate-y-1/2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                          {unreadCount}
+                        </span>
                       )}
-                    </div>
+                    </button>
                     
-                    <div className="p-2 border-t border-gray-200 bg-gray-50">
-                      <button className="w-full text-center text-xs text-indigo-600 hover:text-indigo-800 p-1">
-                        View all notifications
-                      </button>
-                    </div>
+                    {/* Notification Panel */}
+                    {notificationPanelOpen && (
+                      <div className="absolute right-0 mt-2 w-80 bg-white rounded-md shadow-lg overflow-hidden z-10 border border-gray-200">
+                        <div className="p-3 border-b border-gray-200 flex justify-between items-center">
+                          <h3 className="font-semibold text-gray-700">Notifications</h3>
+                          <button 
+                            onClick={markAllAsRead}
+                            className="text-xs text-indigo-600 hover:text-indigo-800"
+                          >
+                            Mark all as read
+                          </button>
+                        </div>
+                        
+                        <div className="max-h-96 overflow-y-auto">
+                          {notifications.length === 0 ? (
+                            <div className="p-4 text-center text-gray-500">No notifications</div>
+                          ) : (
+                            <div>
+                              {notifications.map(notification => (
+                                <div 
+                                  key={notification.id} 
+                                  className={`p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 ${!notification.read ? 'bg-blue-50' : ''}`}
+                                  onClick={() => handleNotificationClick(notification.id)}
+                                >
+                                  <div className="flex">
+                                    <div className="flex-shrink-0 mt-1">
+                                      {getNotificationIcon(notification.type)}
+                                    </div>
+                                    <div className="ml-3 flex-1">
+                                      <div className="flex justify-between items-start">
+                                        <p className={`text-sm font-medium ${!notification.read ? 'text-gray-900' : 'text-gray-600'}`}>
+                                          {notification.title}
+                                        </p>
+                                        {notification.priority === 'high' && (
+                                          <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-800">
+                                            High
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="text-xs text-gray-500 mt-1">
+                                        {notification.message}
+                                      </p>
+                                      <p className="text-xs text-gray-400 mt-1">
+                                        {formatRelativeTime(notification.timestamp)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="p-2 border-t border-gray-200 bg-gray-50">
+                          <button className="w-full text-center text-xs text-indigo-600 hover:text-indigo-800 p-1">
+                            View all notifications
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
+                  
+                  <button className="p-2 text-gray-500 hover:text-gray-700">
+                    <HelpCircle className="h-5 w-5" />
+                  </button>
+                  <button className="p-2 text-gray-500 hover:text-gray-700">
+                    <Settings className="h-5 w-5" />
+                  </button>
+                </div>
               </div>
-              
-              <button className="p-2 text-gray-500 hover:text-gray-700">
-                <HelpCircle className="h-5 w-5" />
-              </button>
-              <button className="p-2 text-gray-500 hover:text-gray-700">
-                <Settings className="h-5 w-5" />
-              </button>
             </div>
           </header>
           
@@ -1175,52 +1195,28 @@ function App() {
                       </div>
                     </div>
                     
-                    <div className="bg-white rounded-lg shadow p-4 md:p-6">
-                      <h3 className="font-semibold mb-4">Query Execution Time Heatmap</h3>
-                      <div className="h-64">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <ScatterChart
-                            margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
-                          >
-                            <CartesianGrid opacity={0.15} />
-                            <XAxis 
-                              type="category"
-                              dataKey="hour"
-                              name="Hour"
-                              tick={{ fontSize: 10 }}
-                              tickFormatter={(value) => value.split(':')[0]}
-                            />
-                            <YAxis 
-                              type="category"
-                              dataKey="day"
-                              name="Day"
-                              tick={{ fontSize: 12 }}
-                            />
-                            <Tooltip 
-                              cursor={{ strokeDasharray: '3 3' }}
-                              formatter={(value, name, props) => {
-                                if (name === 'value') {
-                                  return [`${value} seconds avg.`, 'Execution Time'];
-                                }
-                                return [`${value} queries`, 'Query Count'];
-                              }}
-                            />
-                            <Scatter 
-                              name="value"
-                              data={syntheticData.queryHeatmapData}
-                              fill="#8884d8"
-                              shape="circle"
-                            >
-                              {syntheticData.queryHeatmapData.map((entry, index) => (
-                                <Cell 
-                                  key={`cell-${index}`}
-                                  fill={entry.value > 60 ? '#f87171' : entry.value > 30 ? '#facc15' : '#4ade80'}
-                                  opacity={0.7 + (entry.value / 100) * 0.3}
-                                />
-                              ))}
-                            </Scatter>
-                          </ScatterChart>
-                        </ResponsiveContainer>
+                    <div className="bg-white rounded-lg shadow p-6 mb-6">
+                      <h2 className="text-lg font-semibold mb-4">Query Execution Time Heatmap</h2>
+                      <div className="w-full overflow-x-auto">
+                        <div style={{ minWidth: '800px' }}>
+                          {(() => {
+                            const { data, xLabels, yLabels } = generateHeatmapData();
+                            return (
+                              <HeatMap
+                                xLabels={xLabels}
+                                yLabels={yLabels}
+                                data={data}
+                                cellStyle={(background: string, value: number, min: number, max: number) => ({
+                                  background: `rgb(0, 151, 230, ${value / 100})`,
+                                  fontSize: '11px',
+                                  color: value > 50 ? '#fff' : '#000',
+                                  padding: '6px',
+                                })}
+                                cellRender={(value: number) => value ? `${value}%` : null}
+                              />
+                            );
+                          })()}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1241,7 +1237,7 @@ function App() {
                               paddingAngle={2}
                               dataKey="spend"
                               nameKey="name"
-                              label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                              label={({ name, percent }: { name: string; percent: number }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                               labelLine={false}
                             >
                               {syntheticData.projectSpendData.map((entry, index) => (
@@ -1326,7 +1322,7 @@ function App() {
                                 {query.department}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                ${query.cost.toFixed(2)}
+                                ${typeof query.cost === 'number' ? query.cost.toFixed(2) : query.cost}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm">
                                 {roiLevelTag(query.roi)}
@@ -1462,7 +1458,7 @@ function App() {
                             <XAxis type="number" hide />
                             <YAxis type="category" dataKey="name" hide />
                             <Tooltip 
-                              formatter={(value) => [`$${value.toFixed(2)}`, 'Monthly Savings']}
+                              formatter={(value: number) => [`$${value.toFixed(2)}`, 'Monthly Savings']}
                               labelFormatter={() => ''}
                             />
                             <Bar dataKey="monthlySavings" fill="#4ade80" radius={[0, 4, 4, 0]} barSize={8} />
@@ -1613,7 +1609,7 @@ function App() {
                                 </div>
                                 <div>
                                   <p className="text-xs text-gray-500">Monthly Savings</p>
-                                  <p className="font-medium text-green-600">${opt.monthlySavings.toFixed(2)}</p>
+                                  <p className="font-medium text-green-600">${typeof opt.monthlySavings === 'number' ? opt.monthlySavings.toFixed(2) : opt.monthlySavings}</p>
                                 </div>
                                 <div>
                                   <p className="text-xs text-gray-500">Implementation</p>
@@ -1715,7 +1711,7 @@ function App() {
                               paddingAngle={2}
                               dataKey="value"
                               nameKey="name"
-                              label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                              label={({ name, percent }: { name: string; percent: number }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                               labelLine={false}
                             >
                               {syntheticData.roiDistributionData.map((entry, index) => (
@@ -1857,7 +1853,7 @@ function App() {
                                 {query.department}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                ${query.monthlyCost.toFixed(2)}
+                                ${typeof query.monthlyCost === 'number' ? query.monthlyCost.toFixed(2) : query.monthlyCost}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                 {query.purpose ? (
